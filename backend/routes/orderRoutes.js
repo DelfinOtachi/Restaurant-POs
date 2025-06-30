@@ -26,6 +26,11 @@ router.get('/:id', async(req, res) => {
 // Create a new order
 router.post('/', async(req, res) => {
     try {
+        const { items } = req.body;
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: "Order must include at least one item" });
+        }
+
         const order = new Order(req.body);
         await order.save();
         res.status(201).json(order);
@@ -33,6 +38,7 @@ router.post('/', async(req, res) => {
         res.status(400).json({ error: err.message });
     }
 });
+
 
 // Update an order
 router.put('/:id', async(req, res) => {

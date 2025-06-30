@@ -1,173 +1,60 @@
 const StockItem = require('../models/StockItem');
 
-// Create or Update stock
-exports.createOrUpdateStock = async(req, res) => {
+// Get all stock items
+exports.getAllStockItems = async (req, res) => {
     try {
-        const {
-            itemCode,
-            itemId,
-            categoryId,
-            supplierId,
-            unit,
-            openingStock = 0,
-            purchases = 0,
-            usage = 0,
-            reorderLevel,
-            lowStockAlert,
-            unitPrice,
-            expiryDate,
-            type
-        } = req.body;
-
-        const closingStock = openingStock + purchases - usage;
-        const totalValue = closingStock * unitPrice;
-
-        const updatedStock = await StockItem.findOneAndUpdate({ itemCode }, {
-            itemCode,
-            itemId,
-            categoryId,
-            supplierId,
-            unit,
-            openingStock,
-            purchases,
-            usage,
-            closingStock,
-            reorderLevel,
-            lowStockAlert,
-            unitPrice,
-            totalValue,
-            expiryDate,
-            type,
-            lastUpdated: new Date()
-        }, { new: true, upsert: true });
-
-        res.json(updatedStock);
+        const items = await StockItem.find().populate('categoryId supplierId menuId');
+        res.json(items);
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ error: 'Server error while fetching stock items' });
     }
 };
 
-// Get all stock items
-exports.getAllStockItems = async(req, res) => {
+// Create new stock item
+exports.createStockItem = async (req, res) => {
     try {
-        const {
-            search,
-            categoryId,
-            supplierId,
-            fromDate,
-            toDate,
-            page = 1,
-            limit = 20
-        } = req.query;
+        const item = new StockItem(req.body);
 
-        const query = {};
-        if (search) query.itemCode = { $regex: search, $options: 'i' };
-        if (categoryId) query.categoryId = categoryId;
-        if (supplierId) query.supplierId = supplierId;
-        if (fromDate || toDate) {
-            query.lastUpdated = {};
-            if (fromDate) query.lastUpdated.$gte = new Date(fromDate);
-            if (toDate) query.lastUpdated.$lte = new Date(toDate);
+        // closingStock & totalValue are handled by pre-save hook
+        await item.save();
+        res.status(201).json(item);
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+};
+
+// Update stock item
+exports.updateStockItem = async (req, res) => {
+    try {
+        const existingItem = await StockItem.findById(req.params.id);
+        if (!existingItem) {
+            return res.status(404).json({ error: 'Item not found' });
         }
 
-        const totalItems = await StockItem.countDocuments(query);
-        const items = await StockItem.find(query)
-            .populate('itemId categoryId supplierId')
-            .skip((page - 1) * limit)
-            .limit(Number(limit));
+        // Merge updates from request
+        Object.assign(existingItem, req.body);
 
-        res.json({
-            totalItems,
-            currentPage: Number(page),
-            totalPages: Math.ceil(totalItems / limit),
-            items
-        });
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch stock items' });
-    }
-};
+        // Recalculate stock & value manually (hook doesn't run on update)
+        existingItem.closingStock = existingItem.openingStock + existingItem.purchases - existingItem.usage;
+        existingItem.totalValue = existingItem.closingStock * existingItem.unitPrice;
+        existingItem.lastUpdated = new Date();
 
-// Get one stock item
-exports.getStockItemById = async(req, res) => {
-    try {
-        const item = await StockItem.findById(req.params.id).populate('itemId categoryId supplierId');
-        if (!item) return res.status(404).json({ message: 'Item not found' });
-        res.json(item);
+        await existingItem.save();
+        res.json(existingItem);
     } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch stock item' });
+        res.status(400).json({ error: err.message });
     }
 };
 
 // Delete stock item
-exports.deleteStockItem = async(req, res) => {
+exports.deleteStockItem = async (req, res) => {
     try {
-        const deletedItem = await StockItem.findByIdAndDelete(req.params.id);
-        if (!deletedItem) return res.status(404).json({ message: 'Item not found' });
-        res.json({ message: 'Item deleted', deletedItem });
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to delete item' });
-    }
-};
-
-// Items with low stock
-exports.getLowStockItems = async(req, res) => {
-    try {
-        const items = await StockItem.find({
-            $expr: { $lte: ["$closingStock", "$lowStockAlert"] }
-        });
-        res.json(items);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch low stock items' });
-    }
-};
-
-// Items expiring soon
-exports.getExpiringItems = async(req, res) => {
-    try {
-        const today = new Date();
-        const next7Days = new Date();
-        next7Days.setDate(today.getDate() + 7);
-
-        const items = await StockItem.find({
-            expiryDate: { $lte: next7Days, $gte: today }
-        });
-
-        res.json(items);
-    } catch (err) {
-        res.status(500).json({ error: 'Failed to fetch expiring items' });
-    }
-};
-
-// Log usage (deduct if not ingredient)
-exports.logUsage = async(req, res) => {
-    const { itemId } = req.params;
-    const { used = 0, spoiled = 0, purpose, usedBy, note } = req.body;
-    const quantityUsed = used + spoiled;
-
-    try {
-        const item = await StockItem.findById(itemId);
-        if (!item) return res.status(404).json({ message: 'Item not found' });
-
-        item.usageLogs.push({
-            used,
-            spoiled,
-            purpose,
-            usedBy,
-            note,
-            date: new Date()
-        });
-
-        if (item.type !== 'ingredient') {
-            item.usage += quantityUsed;
-            item.closingStock -= quantityUsed;
-            item.totalValue = item.closingStock * item.unitPrice;
+        const result = await StockItem.findByIdAndDelete(req.params.id);
+        if (!result) {
+            return res.status(404).json({ error: 'Item not found' });
         }
-
-        item.lastUpdated = new Date();
-        await item.save();
-
-        res.json(item);
+        res.json({ message: 'Item deleted' });
     } catch (err) {
-        res.status(500).json({ error: 'Failed to log usage' });
+        res.status(500).json({ error: 'Server error while deleting stock item' });
     }
 };

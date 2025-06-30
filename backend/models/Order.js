@@ -15,7 +15,7 @@ const orderSchema = new mongoose.Schema({
     waitressName: String,
     status: {
         type: String,
-        enum: ['Pending', 'Paid', 'Completed', 'Cancelled'],
+        enum: ['Pending', 'Paid', 'Cancelled'],
         default: 'Pending'
     },
 
