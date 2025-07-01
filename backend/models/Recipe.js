@@ -24,6 +24,7 @@ const recipeSchema = new mongoose.Schema({
         unique: true, // 1 recipe per menu item
     },
     ingredients: [ingredientSchema],
+      instructions: String,
     createdAt: { type: Date, default: Date.now },
 });
 

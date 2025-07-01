@@ -32,6 +32,21 @@ const saleSchema = new mongoose.Schema({
         required: true
     },
     cashierName: String,
+    soldItems: [
+  {
+    menuItemId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Menu',
+      required: true
+    },
+    quantity: {
+      type: Number,
+      required: true
+    },
+    price: Number
+  }
+],
+
     createdAt: {
         type: Date,
         default: Date.now

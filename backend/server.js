@@ -6,10 +6,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 
 // Connect MongoDB
-mongoose.connect(process.env.MONGO_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-    }).then(() => console.log('✅ MongoDB Connected'))
+mongoose.connect(process.env.MONGO_URI).then(() => console.log('✅ MongoDB Connected'))
     .catch(err => console.error('❌ MongoDB connection error:', err));
 
 app.use(express.json());
@@ -41,6 +38,7 @@ app.use('/api/fixed-assets', require('./routes/fixedAssetsRoutes'));
 app.use('/api/finance', require('./routes/financeRoutes'));
 app.use('/api/maintenance', require('./routes/maintenanceRoutes'));
 app.use('/api/stocks', require('./routes/stockRoutes')); // ✅ This line is now active
+app.use('/api/production', require('./routes/production'));
 
 // SERVER START
 const PORT = process.env.PORT || 5000;

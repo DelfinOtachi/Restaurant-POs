@@ -1,20 +1,34 @@
 const mongoose = require('mongoose');
 
 const usageLogSchema = new mongoose.Schema({
-    date: { type: Date, default: Date.now },
-    quantity: Number,
-    type: { type: String, enum: ['sale', 'restock', 'wastage', 'correction'], required: true },
-    referenceId: mongoose.Schema.Types.ObjectId,
-    referenceType: String,
-    note: String,
-    usedBy: String
+  date: { type: Date, default: Date.now },
+  quantity: {
+    type: Number,
+    required: true,
+    validate: {
+      validator: function (v) {
+        return this.type === 'correction' || v >= 0;
+      },
+      message: 'Quantity must be non-negative unless it is a correction.'
+    }
+  },
+  type: { type: String, enum: ['sale', 'restock', 'wastage', 'correction'], required: true },
+  referenceId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: false, // 👈 this makes it optional
+    default: null     // 👈 and prevents casting "" to ObjectId
+  },
+  referenceType: { type: String, default: null },
+  note: String,
+  usedBy: String
 }, { _id: false });
+
 
 const stockItemSchema = new mongoose.Schema({
     name: { type: String, required: true },
     itemCode: { type: String, unique: true, sparse: true },
     unit: { type: String, required: true },
-    menuId: { type: mongoose.Schema.Types.ObjectId, ref: 'Menu' },
+
 
     openingStock: { type: Number, default: 0 },
     purchases: { type: Number, default: 0 },
@@ -29,6 +43,15 @@ const stockItemSchema = new mongoose.Schema({
 
     categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category' },
     supplierId: { type: mongoose.Schema.Types.ObjectId, ref: 'Supplier' },
+    menuID: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Menu' // this should match the name used in mongoose.model('Menu', ...)
+},
+ menuItemID: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'MenuItem' // this should match the name used in mongoose.model('Menu', ...)
+},
+
 
     type: { type: String, enum: ['ingredient', 'packaging', 'finalProduct', 'misc'], required: true },
     usageLogs: [usageLogSchema],
